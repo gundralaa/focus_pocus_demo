@@ -1,20 +1,20 @@
 {
   "files": {
-    "main.js": "/focus_pocus_demo/static/js/main.95367f6f.chunk.js",
-    "main.js.map": "/focus_pocus_demo/static/js/main.95367f6f.chunk.js.map",
+    "main.js": "/focus_pocus_demo/static/js/main.1c6b119c.chunk.js",
+    "main.js.map": "/focus_pocus_demo/static/js/main.1c6b119c.chunk.js.map",
     "runtime-main.js": "/focus_pocus_demo/static/js/runtime-main.5f6ffcd4.js",
     "runtime-main.js.map": "/focus_pocus_demo/static/js/runtime-main.5f6ffcd4.js.map",
     "static/css/2.e0bf2a6d.chunk.css": "/focus_pocus_demo/static/css/2.e0bf2a6d.chunk.css",
-    "static/js/2.7eb005df.chunk.js": "/focus_pocus_demo/static/js/2.7eb005df.chunk.js",
-    "static/js/2.7eb005df.chunk.js.map": "/focus_pocus_demo/static/js/2.7eb005df.chunk.js.map",
+    "static/js/2.1c544b9f.chunk.js": "/focus_pocus_demo/static/js/2.1c544b9f.chunk.js",
+    "static/js/2.1c544b9f.chunk.js.map": "/focus_pocus_demo/static/js/2.1c544b9f.chunk.js.map",
     "index.html": "/focus_pocus_demo/index.html",
     "static/css/2.e0bf2a6d.chunk.css.map": "/focus_pocus_demo/static/css/2.e0bf2a6d.chunk.css.map",
-    "static/js/2.7eb005df.chunk.js.LICENSE.txt": "/focus_pocus_demo/static/js/2.7eb005df.chunk.js.LICENSE.txt"
+    "static/js/2.1c544b9f.chunk.js.LICENSE.txt": "/focus_pocus_demo/static/js/2.1c544b9f.chunk.js.LICENSE.txt"
   },
   "entrypoints": [
     "static/js/runtime-main.5f6ffcd4.js",
     "static/css/2.e0bf2a6d.chunk.css",
-    "static/js/2.7eb005df.chunk.js",
-    "static/js/main.95367f6f.chunk.js"
+    "static/js/2.1c544b9f.chunk.js",
+    "static/js/main.1c6b119c.chunk.js"
   ]
 }
