@@ -1,11 +1,15 @@
 import React, { useState } from "react";
-import { Button, ButtonGroup, Card, CardBody, CardTitle, Container } from "shards-react";
-import { Line } from "react-chartjs-2";
-import { emptyData, chartOptions} from "../utils/mockData";
+import { Button, ButtonGroup, 
+    Card, CardBody, 
+    CardTitle, Container, 
+    Col, Row, Dropdown,
+    DropdownItem, DropdownMenu, DropdownToggle } from "shards-react";
+import { Line, Bar } from "react-chartjs-2";
+import { emptyData, chartOptions, timeOptions, barOptions, emptyBandData} from "../utils/mockData";
 import { MuseClient, zipSamples } from "muse-js";
 import { catchError, multicast } from "rxjs/operators";
 import { Subject } from "rxjs";
-import { bandpassFilter, epoch } from "@neurosity/pipes";
+import { bandpassFilter, epoch, fft, powerByBand } from "@neurosity/pipes";
 import { mockMuseEEG } from "../utils/dataGen";
 
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -15,15 +19,22 @@ function EEGView() {
 
     // Observable Source
     var source$ = null;
-    var multicast$ = null;
-    var subscription = null;
+    var subject$ = null;
 
     const labels = Array.from(Array(512).keys());
 
     // Graph Data
     const [data, setData] = useState(emptyData);
+    // FFT Data
+    const [bandData, setBandData] = useState(emptyBandData);
+    // Continuous Data
+    const [timeBandData, setTimeBandData] = useState([]);
     // Source Set
     const [connected, setConnected] = useState(false);
+    // Dropdown State
+    const [drop, setDrop] = useState(false);
+    // Channel State
+    const [channelState, setChannel] = useState(0);
 
     // Pipeline Settings
     const settings = {
@@ -36,8 +47,13 @@ function EEGView() {
         duration: 512,
     };
 
-    function buildPipe() {
-        let builtPipe$ = zipSamples(source$).pipe(
+    function buildEEGPipe() {
+        // Source Subject
+        subject$ = zipSamples(source$).pipe(
+            multicast(() => new Subject()),
+        );
+
+        let builtPipe$ = subject$.pipe(
             bandpassFilter({
                 cutoffFrequencies: [settings.lowCut, settings.highCut],
                 nbChannels: settings.channels
@@ -52,32 +68,94 @@ function EEGView() {
             })
         );
         // New Subject Multi Observers
-        multicast$ = builtPipe$.pipe(
-            multicast(() => new Subject()),
-        );
-        subscription = multicast$.subscribe(streamData => {
+        //let multicast$ = builtPipe$.pipe(
+            //multicast(() => new Subject()),
+        //);
+        let subscription = builtPipe$.subscribe(streamData => {
             setData(dataState => {
                 Object.values(dataState).forEach((channel, index) => {
                     channel.data = streamData.data[index];
                 });
                 return {
-                    ch0: dataState.ch0
+                    ch0: dataState.ch0,
+                    ch1: dataState.ch1,
+                    ch2: dataState.ch2,
+                    ch3: dataState.ch3,
                 };
             });
         });
-        multicast$.connect();
-        setConnected(true);
     }
 
+    function buildFFTPipe() {
+        if (!subject$) {
+            return "Error"
+        }
+        let builtPipe$ = subject$.pipe(
+            bandpassFilter({
+                cutoffFrequencies: [settings.lowCut, settings.highCut],
+                nbChannels: settings.channels
+            }),
+            epoch({
+                interval: 100,
+                duration: 1024,
+                samplingRate: settings.spRate,
+            }),
+            fft({ bins: 256}),
+            powerByBand(),
+            catchError(err => {
+                console.log(err);
+            })
+        );
+        let subscription = builtPipe$.subscribe(streamData => {
+            setBandData(bandState => {
+                Object.values(bandState).forEach((channel, index) => {
+                    channel.data = [
+                        streamData.alpha[index],
+                        streamData.beta[index],
+                    ]
+                });
+                return {
+                    ch0: bandState.ch0,
+                    ch1: bandState.ch1,
+                    ch2: bandState.ch2,
+                    ch3: bandState.ch3,
+                };
+            });
+            setTimeBandData(timeBand => {
+                return [...timeBand, streamData.beta[0]]
+            });
+        });
+    }
+
+    function connSim() {
+        source$ = mockMuseEEG(256);
+        buildEEGPipe();
+        buildFFTPipe();
+        subject$.connect();
+        setConnected(true);
+    }
 
     async function connMuse() {
         let client = new MuseClient();
         await client.connect();
         await client.start();
         source$ = client.eegReadings
-        buildPipe();
+        buildEEGPipe();
+        buildFFTPipe();
+        subject$.connect();
+        setConnected(true);
     }
 
+    function disconnect() {
+        window.location.reload();
+    }
+
+    /**
+     * Chart View
+     * Displays the EEG Live View
+     * Based on thee current selected channel
+     * @param {*} props 
+     */
     function ChartView(props) {
         return (
             <Container>
@@ -86,10 +164,10 @@ function EEGView() {
         )
     }
     function renderCharts(dataValues) {
-        console.log(data.ch0.data)
         return Object.values(dataValues).map((channel, index) => {
-            if (index === 0) {
+            if (index === channelState) {
                 return (
+                    <Col className="mb-4">
                     <Card key={index}>
                       <CardBody>
                           <CardTitle>{channel.name}</CardTitle>
@@ -98,6 +176,7 @@ function EEGView() {
                               datasets: [{data: channel.data}]}} options={chartOptions}/>
                       </CardBody>
                     </Card>
+                    </Col>
                 );
             } else {
                 return null;
@@ -105,31 +184,113 @@ function EEGView() {
         });
     }
 
-    function connSim() {
-        source$ = mockMuseEEG(256);
-        buildPipe();
+    /**
+     * Chart View
+     * Displays the EEG Live View
+     * Based on thee current selected channel
+     * @param {*} props 
+     */
+    function BarView(props) {
+        return (
+            <Container>
+                {renderBars(props.vals)}
+            </Container>
+        )
+    }
+    function renderBars(dataValues) {
+        return Object.values(dataValues).map((channel, index) => {
+            if (index === channelState) {
+                console.log(channel.data);
+                return (
+                    <Col className="mb-4">
+                    <Card key={index}>
+                      <CardBody>
+                          <CardTitle>{channel.name}</CardTitle>
+                          <Bar data={{
+                              xLabels: ["Beta", "Alpha"],
+                              datasets: [
+                                  {
+                                    data: channel.data,
+                                    backgroundColor: ['rgba(255, 0, 0, 0.9)', 
+                                    'rgba(0, 0, 255, 0.9)'],
+                                  }
+                                ]
+                                }} 
+                                  options={barOptions}/>
+                      </CardBody>
+                    </Card>
+                    </Col>
+                );
+            } else {
+                return null;
+            }
+        });
     }
 
-    function disconnect() {
-        window.location.reload();
-    }
+
 
     return (
         <Container>
-            <Card key={0}>
-                <ButtonGroup>
-                    <Button disabled={connected} onClick={connMuse}>
-                        Muse Connect
-                    </Button>
-                    <Button disabled={connected} onClick={connSim}>
-                        Simulate Data
-                    </Button>
-                    <Button disabled={!connected} onClick={disconnect}>
-                        Disconnect
-                    </Button>
-                </ButtonGroup>
-            </Card>
-            <ChartView vals={data}/>
+            <Row>
+                <Col lg="8" className="col-lg mb-4">
+                        <ButtonGroup size="lg">
+                            <Button disabled={connected} onClick={connMuse}>
+                                Muse Connect
+                            </Button>
+                            <Button disabled={connected} onClick={connSim}>
+                                Simulate Data
+                            </Button>
+                            <Button disabled={!connected} onClick={disconnect}>
+                                Disconnect
+                            </Button>
+                        </ButtonGroup>
+                </Col>
+                <Col lg="4" className="col-lg mb-4">
+                    <Dropdown size="lg" open={drop} 
+                    toggle={() => setDrop(prev => !prev)}> 
+                    <DropdownToggle>Channel</DropdownToggle>
+                        <DropdownMenu>
+                            {Object.values(data).map((channel, index) => {
+                                return(<DropdownItem 
+                                key={index}
+                                onClick={() => setChannel(index)}>
+                                    {channel.name}
+                                </DropdownItem>);
+                            })}
+                        </DropdownMenu>
+                    </Dropdown>
+                </Col>
+            </Row>
+            <Row>
+                {/* Live Signal and Control Panel */}
+                <Col className="col-lg mb-4">
+                    <Row>
+                        <ChartView vals={data}/>
+                    </Row>
+                </Col>
+
+                {/* FFT Charts*/}
+                <Col className="col-lg mb-4">
+                    <Row>
+                        <BarView vals={bandData}/>
+                    </Row>
+                </Col>
+            </Row>
+            {/* Accumulation Chart */}
+            <Row>
+            <Col className="col-lg mb-4">
+                    <Card>
+                      <CardBody>
+                          <CardTitle>Focus</CardTitle>
+                          <Line data={{
+                              xLabels: Array.from(timeBandData.keys()),
+                              datasets: [{data: timeBandData}]}} options={timeOptions}/>
+                      </CardBody>
+                    </Card>
+            </Col>
+            <Col className="col-lg mb-4">
+            </Col>
+            </Row>
         </Container>
     );
 }
